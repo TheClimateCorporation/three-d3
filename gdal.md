@@ -1,0 +1,1 @@
+gdal_translate -scale 4593 10900 0 65535 -ot UInt16 -outsize 5% 5% -of ENVI dembathy.dem dembathy.bin
