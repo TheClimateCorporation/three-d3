@@ -3,7 +3,20 @@ body {
     margin: 0;
 }
 
-.hero-unit {
-    margin: 50px auto 0 auto;
-    width: 300px;
+#info {
+  position: absolute;
+}
+
+#info {
+  width: 800px;
+}
+#info dt {
+  float: left;
+  margin: 0;
+  width: 20%;
+}
+#info dd {
+  float: left;
+  margin: 0;
+  width: 80%;
 }

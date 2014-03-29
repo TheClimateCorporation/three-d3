@@ -1,53 +1,70 @@
 define([
   'backbone',
-  'js/sf_neighb/collections/sf',
-  'js/sf_neighb/collections/sf-neighbs',
+  'js/sf_neighb/collections/cali-geo',
+  'js/sf_neighb/collections/sf-neighbs-geo',
+  'js/sf_neighb/collections/sf-hoods.js',
   'js/sf_neighb/collections/sf-housing-prices',
   'js/sf_neighb/collections/sf-population.js',
   'three',
   'd3',
   'dthree',
   'trackballControls'
-], function(Backbone, Sf, SfNeighbs, SfHousingPrices, SfPopulation, THREE, d3,
-            dthree) {
-
-  // set some camera attributes
-  var VIEW_ANGLE = 45,
-    ASPECT = window.innerWidth / window.innerHeight,
-    NEAR = 10,
-    FAR = 1000000;
+], function(Backbone, CaliGeo, SfNeighbsGeo, SfHoods, SfHousingPrices,
+            SfPopulation, THREE, d3, dthree) {
 
   return Backbone.View.extend({
 
     _renderer: null,
     _camera: null,
     _scene: null,
+    _objects: null,
+
+    _projector: null,
+    _raycaster: null,
+    _mouse: null,
+    _intersectedZip: null,
+
+    events: {
+      'mousemove': 'onMouseMove'
+    },
 
     initialize: function() {
-      this._sf = new Sf();
-      this._sfNeighbs = new SfNeighbs();
+      this._objects = [];
+      this._mouse = { x: 0, y: 0 };
+
+      this._caliGeo = new CaliGeo();
+      this._caliGeoNeighbsGeo = new SfNeighbsGeo();
+      this._sfHoods = new SfHoods();
       this._sfHousingPrices = new SfHousingPrices();
       this._sfPopulation = new SfPopulation();
 
       this._initThree();
 
-      var dataDeferreds = _.map([this._sfHousingPrices, this._sfPopulation,
-        this._sf, this._sfNeighbs], function(data) {
+      var dataDeferreds = _.map([
+        this._sfHoods,
+        this._sfHousingPrices,
+        this._sfPopulation,
+        this._caliGeo,
+        this._caliGeoNeighbsGeo], function(data) {
           return data.fetch();
         });
 
       $.when.apply(null, dataDeferreds).then(_.bind(this._onSfData, this));
+      $(window).on('resize', _.bind(this.onWindowResize, this));
     },
 
     _initThree: function() {
 
+      var width = window.innerWidth,
+        height = window.innerHeight;
+
       this._renderer = new THREE.WebGLRenderer({
         antialiasing: true
       });
-      this._renderer.setSize(window.innerWidth, window.innerHeight);
+      this._renderer.setSize(width, height);
       this._renderer.setClearColorHex(0x7BB5FF);
 
-      this._camera = new THREE.PerspectiveCamera(VIEW_ANGLE, ASPECT, NEAR, FAR);
+      this._camera = new THREE.PerspectiveCamera(45, width/height, 10, 1000000);
 
       this._camera.position.set(0, 500, 500);
       this._camera.lookAt(0, 0, 0);
@@ -59,7 +76,10 @@ define([
       this._scene.add(this._camera);
 
       this._axes = new THREE.AxisHelper(200);
-      this._scene.add(this._axes);
+      //this._scene.add(this._axes);
+
+      this._projector = new THREE.Projector();
+      this._raycaster = new THREE.Raycaster();
 
       this.initColors();
       this.initLighting();
@@ -88,7 +108,7 @@ define([
       var circleGeometry = new THREE.CircleGeometry(100000, 50),
         material = new THREE.MeshPhongMaterial({
           color: 0x4E8975
-        });       
+        });
       var circle = new THREE.Mesh(circleGeometry, material);
       circle.position.y = -10;
       circle.rotation.x = -Math.PI/2;
@@ -97,8 +117,8 @@ define([
 
     _onSfData: function() {
 
-      this._sf.each(function(feature) {
-        var geoPathGen = this._sf.getGeoPathGenerator(),
+      this._caliGeo.each(function(feature) {
+        var geoPathGen = this._caliGeo.getGeoPathGenerator(),
           geoFeature = geoPathGen(feature.toJSON()),
           meshes = dthree.transformSvgPath(geoFeature),
           geometry = new THREE.ExtrudeGeometry(meshes, {
@@ -114,8 +134,8 @@ define([
           this._scene.add(toAdd);
       }, this);
 
-      this._sfNeighbs.each(function(feature) {
-        var geoPathGen = this._sfNeighbs.getGeoPathGenerator(),
+      this._caliGeoNeighbsGeo.each(function(feature) {
+        var geoPathGen = this._caliGeoNeighbsGeo.getGeoPathGenerator(),
           geoFeature = geoPathGen(feature.toJSON()),
           meshes = dthree.transformSvgPath(geoFeature),
           zip = parseInt(feature.get('properties').id)
@@ -133,16 +153,20 @@ define([
             bevelEnabled: false
           });
 
-        var material = new THREE.MeshPhongMaterial({
-          color: this._colors(population/100)
-        });
+        var color = this._colors(population/100),
+          material = new THREE.MeshPhongMaterial({
+            color: color
+          });
         var toAdd = new THREE.Mesh(neighbGeometry, material);
+        toAdd.color = color;
+        toAdd.zip = zip;
 
         // rotate and position the elements nicely in the center
         toAdd.rotation.x = Math.PI/2;
         toAdd.position.y += extrude;
 
-        this._scene.add(toAdd);        
+        this._objects.push(toAdd);
+        this._scene.add(toAdd);
       }, this);
 
       this.render();
@@ -155,9 +179,82 @@ define([
 
     renderThree: function() {
       this._controls.update();
-      requestAnimationFrame(_.bind(this.renderThree, this));
+      this.updateIntersections();
       this._renderer.render(this._scene, this._camera);
-    }
+      requestAnimationFrame(_.bind(this.renderThree, this));
+    },
 
+    updateIntersections: function() {
+      var mouseVector = new THREE.Vector3(this._mouse.x, this._mouse.y, 1),
+        cameraVector = this._camera.position,
+        intersects,
+        zip;
+
+      this._projector.unprojectVector(mouseVector, this._camera);
+      this._raycaster.set(cameraVector,
+        mouseVector.sub(cameraVector).normalize());
+      intersects = this._raycaster.intersectObjects(this._scene.children);
+
+      if (intersects.length > 0) {
+        zip = intersects[0].object.zip;
+        if (_.isUndefined(zip)) {
+          this._intersectedZip = null;
+        } else {
+          this.unhighlightObjects();
+          this.highlightObject(intersects[0].object);
+          if (zip != this._intersectedZip) {
+            this._intersectedZip = zip;
+            this.updateInfo(zip);
+          }
+        }
+      } else {
+        this.unhighlightObjects();
+        this._intersectedZip = null;
+      }
+    },
+
+    highlightObject: function(object) {
+      object.material.color.setHex(0xFFE87C);
+    },
+
+    unhighlightObjects: function() {
+      _.each(this._objects, function(object) {
+        object.material.color.set(object.color);
+      });
+    },
+
+    updateInfo: function(zip) {
+      var hoods = this._sfHoods.findWhere({
+        zip: zip
+      }).get('hoods'),
+        population = this._sfPopulation.findWhere({
+          zip: zip
+        }),
+        housingPrice = this._sfHousingPrices.findWhere({
+          zip: zip
+        });
+
+      hoodsTxt = hoods[0] + ', ' + hoods[1] + ', ' + hoods[3];
+      populationTxt = population.get('population')
+      housingPriceTxt = '$' + housingPrice.get('zpctile50');
+
+
+      this.$('.zip').html(zip);
+      this.$('.population').html(populationTxt);
+      this.$('.hoods').html(hoodsTxt);
+      this.$('.housing-price').html(housingPriceTxt);
+    },
+
+    onMouseMove: function(event) {
+      event.preventDefault();
+      this._mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+      this._mouse.y = -( event.clientY / window.innerHeight ) * 2 + 1;
+    },
+
+    onWindowResize: function() {
+      this._camera.aspect = window.innerWidth / window.innerHeight;
+      this._camera.updateProjectionMatrix();
+      this._renderer.setSize(window.innerWidth, window.innerHeight);
+    }
   });
 });
