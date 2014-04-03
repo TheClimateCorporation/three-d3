@@ -21,11 +21,11 @@ require.config({
         },
         terrainLoader: {
             deps: ['three'],
-            exports: 'TerrainLoader'
+            exports: 'THREE'
         },
         trackballControls: {
             deps: ['three'],
-            exports: 'TrackBallControls'
+            exports: 'THREE'
         },
         d3: {
             exports: 'd3'
@@ -48,17 +48,9 @@ require.config({
 });
 
 require([
-    'js/sf_neighb/views/sfgeo3d',
-    //'js/tahoe/views/terrain',
-    //'js/learn/views/learn-three',
-    'backbone'
-], function (SfGeo3d, Backbone) {
-    /*var learnThreeView = new LearnThreeView({
+    'scripts/viz/views/sf.dthree',
+], function (SfDThreeView) {
+    var sfDThreeView = new SfDThreeView({
         el: '#container'
     });
-    learnThreeView.render();*/
-    window.terrainView = new SfGeo3d({
-        el: '#container'
-    });
-    Backbone.history.start();
 });
