@@ -4,7 +4,7 @@ define([
 
   return CsvCollection.extend({
 
-    url: '/data/csv/sf-neighborhoods.csv',
+    url: require.toUrl('data/csv/sf-neighborhoods.csv'),
 
     parse: function(data) {
       var rows = CsvCollection.prototype.parse.apply(this, arguments);
