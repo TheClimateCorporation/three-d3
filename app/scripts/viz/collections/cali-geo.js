@@ -11,6 +11,6 @@ define([
     translateX: 59300,
     translateY: 5700,
 
-    url: require.toUrl('data/json/california.json')
+    url: 'data/json/california.json'
   });
 });

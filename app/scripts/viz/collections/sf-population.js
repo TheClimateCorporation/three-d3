@@ -4,6 +4,6 @@ define([
 
   return CsvCollection.extend({
 
-    url: require.toUrl('data/csv/sf-population.csv')
+    url: 'data/csv/sf-population.csv'
   });
 });
