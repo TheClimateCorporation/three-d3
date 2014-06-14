@@ -4,6 +4,6 @@ define([
 
   return CsvCollection.extend({
 
-    url: 'data/csv/sf-population.csv'
+    url: '/data/csv/sf-population.csv'
   });
 });
