@@ -11,6 +11,6 @@ define([
     translateX: 59300,
     translateY: 5700,
 
-    url: 'data/json/sf-neighborhoods.json'
+    url: '/data/json/sf-neighborhoods.json'
   });
 });
