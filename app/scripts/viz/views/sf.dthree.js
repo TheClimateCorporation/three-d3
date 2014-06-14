@@ -59,8 +59,7 @@ define([
     initColors: function() {
       this._colors = d3.scale.linear()
         .domain(_.range(0, 701, 100))
-        .range( ["#ffffff","#f0f0f0","#d9d9d9","#bdbdbd","#969696","#737373",
-          "#525252","#252525"]);
+        .range( ["#f7fbff","#deebf7","#c6dbef","#9ecae1","#6baed6","#4292c6","#2171b5","#084594"]);
     },
 
     initLighting: function() {
@@ -116,7 +115,7 @@ define([
           }).get('population');
 
         // extrude mesh
-        var extrude = 2*medianHousingPrice/100000,
+        var extrude = 5*medianHousingPrice/100000,
           neighbGeometry = new THREE.ExtrudeGeometry(meshes, {
             amount: extrude,
             bevelEnabled: false
